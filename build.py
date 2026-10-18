@@ -16,6 +16,7 @@ import re, os, sys, time
 
 MODULES = [
     'src/constants.js',
+    'src/i18n.js',
     'src/styles.js',
     'src/go2rtc-player.js',
     'src/card.js',

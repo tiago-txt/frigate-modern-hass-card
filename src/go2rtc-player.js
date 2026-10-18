@@ -255,6 +255,14 @@ class VideoRTC extends HTMLElement {
         this.appendChild(this.video);
 
         this.video.addEventListener('error', ev => {
+            // No source at all means *we* took the video down: ondisconnect()
+            // clears src before the browser gets round to reporting the load it
+            // aborted, so this arrives as MEDIA_ERR_SRC_NOT_SUPPORTED with
+            // "Empty src attribute". Logging that reads like a stream failure,
+            // and closing the socket here killed the connection a reconnect had
+            // just opened (visibilitychange does exactly that on every tab
+            // switch). A real decode failure always has a source behind it.
+            if (!ev.target.getAttribute('src') && !ev.target.srcObject) return;
             const err = this.video.error;
             // https://developer.mozilla.org/en-US/docs/Web/API/MediaError/code
             const MEDIA_ERRORS = {

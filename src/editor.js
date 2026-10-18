@@ -1,14 +1,20 @@
 // editor.js — FrigateModernHassCardEditor config panel
-import { DEFAULT_ROTATE_S, GRID_LAYOUTS, findLayout } from './constants.js';
+import { DEFAULT_ROTATE_S, GRID_LAYOUTS, findLayout, OVERLAY_POSITIONS } from './constants.js';
+import { pickLang, translate } from './i18n.js';
 
 export class FrigateModernHassCardEditor extends HTMLElement {
   setConfig(c) { this._config=c; this._render(); }
   set hass(h) {
     this._hass = h;
-    // Only re-render when the camera entity list actually changes — prevents dropdown closing
-    const key = this._frigateEntities().join(',');
+    this._lang = pickLang(h);
+    // Only re-render when the camera entity list (or the language) changes —
+    // prevents dropdown closing while the user is choosing.
+    const key = this._lang + '|' + this._frigateEntities().join(',');
     if (key !== this._lastEntityKey) { this._lastEntityKey = key; this._render(); }
   }
+
+  // Editor labels in the user's language, same dictionary as the card.
+  _t(key, vars) { return translate(this._lang || 'en', key, vars); }
 
   _frigateEntities() {
     if (!this._hass) return [];
@@ -45,17 +51,17 @@ export class FrigateModernHassCardEditor extends HTMLElement {
     // no separate reorder control is needed.
     const camRows = cams.map((c,i) => `
       <div class="cr" data-row="${i}">
-        <span class="cnum" title="Tile ${i+1} in the grid">${i+1}</span>
+        <span class="cnum" title="${this._t('ed.tileN', { n: i+1 })}">${i+1}</span>
         <select name="cam-entity-${i}" class="ce" data-cam-entity="${i}">
-          <option value="">Select camera</option>
+          <option value="">${this._t('ed.selectCamera')}</option>
           ${opts(c.entity||'')}
         </select>
-        <input type="text" name="cam-name-${i}" class="cn" data-cam-name="${i}" placeholder="Display name (optional)" value="${c.name||''}">
+        <input type="text" name="cam-name-${i}" class="cn" data-cam-name="${i}" placeholder="${this._t('ed.displayName')}" value="${c.name||''}">
         ${usingLayout ? '' : `
-        <select class="cs" data-cam-span="${i}" title="Tile size in the grid">
+        <select class="cs" data-cam-span="${i}" title="${this._t('ed.tileSize')}">
           ${[1,2,3].map(v => `<option value="${v}" ${Number(c.span?.cols ?? c.span ?? 1)===v?'selected':''}>${v}x${v}</option>`).join('')}
         </select>`}
-        ${cams.length > 1 ? `<button class="xb" data-remove-cam="${i}" title="Remove">✕</button>` : ''}
+        ${cams.length > 1 ? `<button class="xb" data-remove-cam="${i}" title="${this._t('ed.remove')}">✕</button>` : ''}
       </div>`).join('');
 
     const hiddenTabs = new Set(this._config?.hidden_tabs || []);
@@ -65,6 +71,9 @@ export class FrigateModernHassCardEditor extends HTMLElement {
 
     const defaultView = this._config?.default_view || 'single';
     const rotateOnLoad = this._config?.rotate_on_load === true;
+    // 'auto' (the card's own rule), on, or off — a checkbox could not express
+    // "leave the card alone", which is what most people want.
+    const timelineSetting = typeof this._config?.timeline === 'boolean' ? this._config.timeline : 'auto';
     const multiCam = cams.length > 1 || (cams.length === 1 && !cams[0].entity);
 
     this.innerHTML = `<style>
@@ -113,60 +122,92 @@ export class FrigateModernHassCardEditor extends HTMLElement {
     </style>
     <div class="ed-wrap">
       <div>
-        <span class="field-label">Cameras ${frigEntities.length ? '<small class="hint" style="font-weight:400">· Frigate cameras detected</small>' : ''}</span>
+        <span class="field-label">${this._t('ed.cameras')} ${frigEntities.length ? `<small class="hint" style="font-weight:400">${this._t('ed.frigateDetected')}</small>` : ''}</span>
         <div id="cam-list">${camRows}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <button class="add-btn" id="add-cam">+ Add camera</button>
-          <button class="add-btn" id="toggle-layout">Grid layout${usingLayout ? `: ${findLayout(layoutId)?.label || ''}` : ''}</button>
+          <button class="add-btn" id="add-cam">${this._t('ed.addCamera')}</button>
+          <button class="add-btn" id="toggle-layout">${this._t('ed.gridLayout')}${usingLayout ? `: ${this._layLabel(findLayout(layoutId))}` : ''}</button>
         </div>
-        ${cams.length > 1 ? '<small class="hint" style="display:block;margin-top:4px">The number is the tile the camera fills in the grid. Pick a camera that is already in another tile to swap the two.</small>' : ''}
-        ${cams.length > 4 ? '<small class="hint" style="display:block;margin-top:4px">Every camera in the grid streams at once, so more cameras means more load on the browser and on Frigate.</small>' : ''}
+        ${cams.length > 1 ? `<small class="hint" style="display:block;margin-top:4px">${this._t('ed.camSwapHint')}</small>` : ''}
+        ${cams.length > 4 ? `<small class="hint" style="display:block;margin-top:4px">${this._t('ed.camLoadHint')}</small>` : ''}
         <div id="layout-picker" style="display:${this._layoutOpen ? 'block' : 'none'};margin-top:8px">
           <div class="lay-grid">${layoutChoices.map(l => this._layoutButton(l, layoutId)).join('')}</div>
-          <small class="hint">The numbers match the tile numbers beside each camera above. A layout sets the columns and the tile sizes together.</small>
+          <small class="hint">${this._t('ed.layoutHint')}</small>
           <div style="border-top:1px solid var(--divider-color);margin-top:10px;padding-top:8px">
-            <label class="chk-lbl"><input type="checkbox" name="stack_on_mobile" id="stack_on_mobile" ${this._config?.stack_on_mobile!==false?'checked':''}> On a phone, stack the cameras one per row</label>
-            <small class="hint" style="display:block;margin-top:4px">Any layout leaves the cameras too small to see on a phone, so this overrides it there. Turn it off to keep the grid on a phone too, for two cameras side by side or a small overview.</small>
+            <label class="chk-lbl"><input type="checkbox" name="stack_on_mobile" id="stack_on_mobile" ${this._config?.stack_on_mobile!==false?'checked':''}> ${this._t('ed.stackOnMobile')}</label>
+            <small class="hint" style="display:block;margin-top:4px">${this._t('ed.stackHint')}</small>
           </div>
         </div>
       </div>
 
-      <label><span class="field-label">Title (optional)</span>
-        <input name="title" class="tf" id="title" type="text" value="${this._config?.title||''}" placeholder="My Camera">
+      <label><span class="field-label">${this._t('ed.title')}</span>
+        <input name="title" class="tf" id="title" type="text" value="${this._config?.title||''}" placeholder="${this._t('ed.titlePlaceholder')}">
       </label>
-      <label><span class="field-label">Subtitle</span>
-        <input name="subtitle" class="tf" id="subtitle" type="text" value="${this._config?.subtitle||''}" placeholder="Frigate">
+      <label><span class="field-label">${this._t('ed.subtitle')}</span>
+        <input name="subtitle" class="tf" id="subtitle" type="text" value="${this._config?.subtitle||''}" placeholder="${this._t('ed.subtitlePlaceholder')}">
       </label>
 
       <div class="section">
-        <span class="field-label">View</span>
+        <span class="field-label">${this._t('ed.view')}</span>
         <div class="radio-row">
-          <label class="radio-lbl"><input type="radio" name="default_view" value="single" ${defaultView==='single'?'checked':''}> Single camera</label>
-          <label class="radio-lbl"><input type="radio" name="default_view" value="grid" ${defaultView==='grid'?'checked':''}> Grid (all cams)</label>
+          <label class="radio-lbl"><input type="radio" name="default_view" value="single" ${defaultView==='single'?'checked':''}> ${this._t('ed.single')}</label>
+          <label class="radio-lbl"><input type="radio" name="default_view" value="grid" ${defaultView==='grid'?'checked':''}> ${this._t('ed.gridAll')}</label>
         </div>
         <div style="margin-top:8px">
-          <label class="chk-lbl"><input type="checkbox" name="rotate_on_load" id="rotate_on_load" ${rotateOnLoad?'checked':''}> Auto-rotate on load</label>
+          <label class="chk-lbl"><input type="checkbox" name="camera_only" id="camera_only" ${this._config?.camera_only===true?'checked':''}> <b>${this._t('ed.cameraOnly')}</b> (${this._t('ed.cameraOnlyHint')})</label>
         </div>
         <div style="margin-top:6px">
-          <label><span class="hint">Rotate interval (seconds, 0 = use default ${DEFAULT_ROTATE_S}s)</span>
+          <label class="chk-lbl"><input type="checkbox" name="events_only" id="events_only" ${this._config?.events_only===true?'checked':''}> <b>${this._t('ed.eventsOnly')}</b> (${this._t('ed.eventsOnlyHint')})</label>
+        </div>
+        <div style="margin-top:6px">
+          <label class="chk-lbl"><input type="checkbox" name="floating_menu" id="floating_menu" ${this._config?.floating_menu!==false?'checked':''}> ${this._t('ed.floatingMenu')}</label>
+        </div>
+        <div style="margin-top:6px">
+          <label class="chk-lbl"><input type="checkbox" name="ptz" id="ptz" ${this._config?.ptz!==false?'checked':''}> ${this._t('ed.ptzEnable')}</label>
+        </div>
+        <div style="margin-top:6px">
+          <span class="field-label" style="font-size:11px">${this._t('ed.menuPosition')}</span>
+          <select class="tf" id="menu_position" name="menu_position" style="margin-top:2px">
+            ${OVERLAY_POSITIONS.map(pos => `<option value="${pos}" ${(this._config?.menu_position||'right')===pos?'selected':''}>${this._t('pos.'+pos)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="margin-top:6px">
+          <span class="field-label" style="font-size:11px">${this._t('ed.ptzPosition')}</span>
+          <select class="tf" id="ptz_position" name="ptz_position" style="margin-top:2px">
+            ${OVERLAY_POSITIONS.map(pos => `<option value="${pos}" ${(this._config?.ptz_position||'bottom-right')===pos?'selected':''}>${this._t('pos.'+pos)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="margin-top:6px">
+          <span class="field-label" style="font-size:11px">${this._t('ed.timeline')}</span>
+          <select class="tf" id="timeline" name="timeline" style="margin-top:2px">
+            <option value="auto" ${timelineSetting==='auto'?'selected':''}>${this._t('ed.timelineAuto')}</option>
+            <option value="on" ${timelineSetting===true?'selected':''}>${this._t('ed.timelineOn')}</option>
+            <option value="off" ${timelineSetting===false?'selected':''}>${this._t('ed.timelineOff')}</option>
+          </select>
+        </div>
+        <div style="margin-top:8px">
+          <label class="chk-lbl"><input type="checkbox" name="rotate_on_load" id="rotate_on_load" ${rotateOnLoad?'checked':''}> ${this._t('ed.autoRotateOnLoad')}</label>
+        </div>
+        <div style="margin-top:6px">
+          <label><span class="hint">${this._t('ed.rotateInterval', { n: DEFAULT_ROTATE_S })}</span>
             <input name="rotate_seconds" class="tf" id="rotate_seconds" type="number" value="${this._config?.rotate_seconds??0}" min="0" style="margin-top:3px">
           </label>
         </div>
       </div>
       <div class="section">
-        <span class="field-label">Theme</span>
+        <span class="field-label">${this._t('ed.theme')}</span>
         <div class="radio-row">
-          <label class="radio-lbl"><input type="radio" name="theme" value="dark"  ${(this._config?.theme||'dark')==='dark' ?'checked':''}> Dark</label>
-          <label class="radio-lbl"><input type="radio" name="theme" value="light" ${this._config?.theme==='light'?'checked':''}> Light</label>
-          <label class="radio-lbl"><input type="radio" name="theme" value="auto"  ${this._config?.theme==='auto' ?'checked':''}> Auto (browser)</label>
+          <label class="radio-lbl"><input type="radio" name="theme" value="auto"  ${(this._config?.theme||'auto')==='auto' ?'checked':''}> ${this._t('ed.themeAuto')}</label>
+          <label class="radio-lbl"><input type="radio" name="theme" value="dark"  ${this._config?.theme==='dark' ?'checked':''}> ${this._t('ed.themeDark')}</label>
+          <label class="radio-lbl"><input type="radio" name="theme" value="light" ${this._config?.theme==='light'?'checked':''}> ${this._t('ed.themeLight')}</label>
         </div>
       </div>
       <div class="section">
-        <span class="field-label">Colors</span>
+        <span class="field-label">${this._t('ed.colors')}</span>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
           <div>
             <label class="chk-lbl" style="margin-bottom:4px">
-              <input type="checkbox" id="use_accent" ${this._config?.accent_color?'checked':''}> Custom accent
+              <input type="checkbox" id="use_accent" ${this._config?.accent_color?'checked':''}> ${this._t('ed.customAccent')}
             </label>
             <div style="display:flex;align-items:center;gap:6px">
               <input type="color" id="accent_color" value="${this._config?.accent_color||'#3b82f6'}" style="width:40px;height:30px;border:none;padding:2px;border-radius:6px;cursor:pointer">
@@ -175,7 +216,7 @@ export class FrigateModernHassCardEditor extends HTMLElement {
           </div>
           <div>
             <label class="chk-lbl" style="margin-bottom:4px">
-              <input type="checkbox" id="use_bg" ${this._config?.bg_color?'checked':''}> Custom background
+              <input type="checkbox" id="use_bg" ${this._config?.bg_color?'checked':''}> ${this._t('ed.customBg')}
             </label>
             <div style="display:flex;align-items:center;gap:6px">
               <input type="color" id="bg_color" value="${this._config?.bg_color||'#1c2233'}" style="width:40px;height:30px;border:none;padding:2px;border-radius:6px;cursor:pointer">
@@ -183,68 +224,87 @@ export class FrigateModernHassCardEditor extends HTMLElement {
             </div>
           </div>
         </div>
-        <small class="hint">Check the box to activate. Uncheck to revert to theme default.</small>
+        <small class="hint">${this._t('ed.colorHint')}</small>
       </div>
 
       <div class="section">
-        <span class="field-label">Hidden tabs</span>
+        <span class="field-label">${this._t('ed.hiddenTabs')}</span>
         <div class="chk-grid">
-          ${tabCheck('recordings','Recordings')}
-          ${tabCheck('clips','Clips')}
-          ${tabCheck('snapshot','Snapshots')}
-          ${tabCheck('reviews','Reviews')}
-          ${tabCheck('kept','Kept')}
+          ${tabCheck('recordings',this._t('tab.recordings'))}
+          ${tabCheck('clips',this._t('tab.clips'))}
+          ${tabCheck('snapshot',this._t('tab.snapshots'))}
+          ${tabCheck('reviews',this._t('tab.reviews'))}
+          ${tabCheck('kept',this._t('tab.kept'))}
         </div>
       </div>
 
       <div class="section" ${usingLayout ? 'style="display:none"' : ''}>
-        <span class="field-label">Grid columns</span>
+        <span class="field-label">${this._t('ed.gridColumns')}</span>
         <div class="radio-row">
-          <label class="radio-lbl"><input type="radio" name="grid_columns" value="auto" ${(this._config?.grid_columns||'auto')==='auto'?'checked':''}> Automatic</label>
-          <label class="radio-lbl"><input type="radio" name="grid_columns" value="1" ${String(this._config?.grid_columns)==='1'?'checked':''}> 1 (stacked)</label>
+          <label class="radio-lbl"><input type="radio" name="grid_columns" value="auto" ${(this._config?.grid_columns||'auto')==='auto'?'checked':''}> ${this._t('ed.auto')}</label>
+          <label class="radio-lbl"><input type="radio" name="grid_columns" value="1" ${String(this._config?.grid_columns)==='1'?'checked':''}> ${this._t('ed.col1')}</label>
           <label class="radio-lbl"><input type="radio" name="grid_columns" value="2" ${String(this._config?.grid_columns)==='2'?'checked':''}> 2</label>
           <label class="radio-lbl"><input type="radio" name="grid_columns" value="3" ${String(this._config?.grid_columns)==='3'?'checked':''}> 3</label>
           <label class="radio-lbl"><input type="radio" name="grid_columns" value="4" ${String(this._config?.grid_columns)==='4'?'checked':''}> 4</label>
         </div>
-        <small class="hint">A camera can occupy more than one tile, so one can be shown larger than the rest. Automatic picks a column count from the number of cameras and the space available: on a tablet that comes to <b>${this._colsAt(800, cams.length)}</b> per row. A phone stacks regardless, see below.</small>
+        <small class="hint">${this._t('ed.colsHint', { cols: `<b>${this._colsAt(800, cams.length)}</b>` })}</small>
       </div>
 
       <div class="section">
-        <span class="field-label">Events panel</span>
-        <label class="chk-lbl"><input type="checkbox" name="events_collapsed" id="events_collapsed" ${this._config?.events_collapsed===true?'checked':''}> Start with the events panel hidden</label>
-        <small class="hint" style="display:block;margin-top:4px">On a wide card the events list sits beside the cameras. Hiding it gives the cameras the full width; a button on the card slides it back in.</small>
+        <span class="field-label">${this._t('ed.eventsPanel')}</span>
+        <label class="chk-lbl"><input type="checkbox" name="events_collapsed" id="events_collapsed" ${this._config?.events_collapsed===true?'checked':''}> ${this._t('ed.eventsCollapsed')}</label>
+        <small class="hint" style="display:block;margin-top:4px">${this._t('ed.eventsHint')}</small>
       </div>
       </div>
 
       <div class="section">
-        <span class="field-label">Live view provider</span>
+        <span class="field-label">${this._t('ed.liveProvider')}</span>
         <div class="radio-row">
-          <label class="radio-lbl"><input type="radio" name="live_provider" value="hls" ${(this._config?.live_provider||'hls')==='hls'?'checked':''}> Home Assistant stream</label>
-          <label class="radio-lbl"><input type="radio" name="live_provider" value="go2rtc" ${this._config?.live_provider==='go2rtc'?'checked':''}> go2rtc, low latency (experimental)</label>
+          <label class="radio-lbl"><input type="radio" name="live_provider" value="hls" ${(this._config?.live_provider||'hls')==='hls'?'checked':''}> ${this._t('ed.providerHls')}</label>
+          <label class="radio-lbl"><input type="radio" name="live_provider" value="go2rtc" ${this._config?.live_provider==='go2rtc'?'checked':''}> ${this._t('ed.providerGo2rtc')}</label>
         </div>
-        <small class="hint">go2rtc streams via Frigate's built-in WebRTC/MSE for much lower latency. Falls back to the Home Assistant stream automatically if it can't connect.</small>
+        <small class="hint">${this._t('ed.providerHint')}</small>
         <div style="margin-top:8px">
-          <span class="field-label">go2rtc transport</span>
+          <span class="field-label">${this._t('ed.transport')}</span>
           <div class="radio-row">
-            <label class="radio-lbl"><input type="radio" name="go2rtc_mode" value="mse" ${(this._config?.go2rtc_mode||'mse')==='mse'?'checked':''}> MSE (recommended)</label>
-            <label class="radio-lbl"><input type="radio" name="go2rtc_mode" value="webrtc" ${this._config?.go2rtc_mode==='webrtc'?'checked':''}> WebRTC only</label>
-            <label class="radio-lbl"><input type="radio" name="go2rtc_mode" value="auto" ${this._config?.go2rtc_mode==='auto'?'checked':''}> Automatic</label>
+            <label class="radio-lbl"><input type="radio" name="go2rtc_mode" value="mse" ${(this._config?.go2rtc_mode||'mse')==='mse'?'checked':''}> ${this._t('ed.mse')}</label>
+            <label class="radio-lbl"><input type="radio" name="go2rtc_mode" value="webrtc" ${this._config?.go2rtc_mode==='webrtc'?'checked':''}> ${this._t('ed.webrtc')}</label>
+            <label class="radio-lbl"><input type="radio" name="go2rtc_mode" value="auto" ${this._config?.go2rtc_mode==='auto'?'checked':''}> ${this._t('ed.transportAuto')}</label>
           </div>
-          <small class="hint">MSE runs entirely over the proxied connection, so it works remotely and in the companion apps. WebRTC can be marginally faster but connects directly to go2rtc, which usually only resolves on the local network.</small>
+          <small class="hint">${this._t('ed.transportHint')}</small>
         </div>
       </div>
 
       <div class="section">
-        <span class="field-label">Maximum camera height</span>
+        <span class="field-label">${this._t('ed.maxHeight')}</span>
         <input name="stream_height" class="tf" id="stream_height" type="number"
           value="${this._config?.stream_height||''}" min="20" max="100"
-          placeholder="e.g. 70, blank = automatic">
-        <small class="hint">As a percentage of the screen height. Leave empty to let the cameras size themselves; a grid uses at most 70% by default. Raise it for a wall display.</small>
+          placeholder="${this._t('ed.maxHeightPlaceholder')}">
+        <small class="hint">${this._t('ed.maxHeightHint')}</small>
       </div>
 
       <div class="section">
-        <span class="field-label">Window hours</span>
+        <span class="field-label">${this._t('ed.windowHours')}</span>
         <input name="window_hours" class="tf" id="window_hours" type="number" value="${this._config?.window_hours||24}" min="1" max="720">
+      </div>
+
+      <div class="section">
+        <span class="field-label">${this._t('ed.timelineHours')}</span>
+        <input name="timeline_hours" class="tf" id="timeline_hours" type="number" value="${this._config?.timeline_hours||2}" min="1" max="720">
+        <small class="hint">${this._t('ed.timelineHoursHint')}</small>
+        <div style="margin-top:6px">
+          <span class="field-label" style="font-size:11px">${this._t('ed.timelineMode')}</span>
+          <select class="tf" id="timeline_mode" name="timeline_mode" style="margin-top:2px">
+            <option value="events" ${this._config?.timeline_mode!=='recordings'?'selected':''}>${this._t('ed.tlEvents')}</option>
+            <option value="recordings" ${this._config?.timeline_mode==='recordings'?'selected':''}>${this._t('ed.tlRecordings')}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section">
+        <span class="field-label">${this._t('ed.eventsLimit')}</span>
+        <input name="events_limit" class="tf" id="events_limit" type="number" value="${this._config?.events_limit??300}" min="20" max="2000">
+        <small class="hint">${this._t('ed.eventsLimitHint')}</small>
       </div>
 
 
@@ -306,7 +366,16 @@ export class FrigateModernHassCardEditor extends HTMLElement {
       : (pinned > 0 ? pinned
       : (camCount <= 1 ? 1 : camCount <= 4 ? 2 : camCount <= 9 ? 3 : 4));
     cols = Math.max(1, Math.min(cols, Math.floor(width / min)));
-    return cols === 1 ? '1 camera' : `${cols} cameras`;
+    return cols === 1 ? this._t('ed.oneCamera') : this._t('ed.nCameras', { n: cols });
+  }
+
+  // Layout names in the user's language, falling back to the English label if a
+  // translation has not been added for that id yet.
+  _layLabel(l) {
+    if (!l) return '';
+    const key = 'lay.' + l.id;
+    const v = this._t(key);
+    return v === key ? l.label : v;
   }
 
   // Draw a layout as numbered cells. Seeing the shape is the point; a written
@@ -315,8 +384,8 @@ export class FrigateModernHassCardEditor extends HTMLElement {
     const sel = l.id === selected ? ' sel' : '';
     if (l.id === 'auto') {
       return `<button type="button" class="lay${sel}" data-layout="auto">
-        <div class="lay-auto">fits the<br>camera count</div>
-        <div class="lay-lbl">${l.label}</div></button>`;
+        <div class="lay-auto">${this._t('ed.fitsCount')}</div>
+        <div class="lay-lbl">${this._layLabel(l)}</div></button>`;
     }
     const cells = Array.from({ length: l.tiles }, (_, i) => {
       const sp = l.spans[i];
@@ -325,7 +394,7 @@ export class FrigateModernHassCardEditor extends HTMLElement {
     }).join('');
     return `<button type="button" class="lay${sel}" data-layout="${l.id}">
       <div class="lay-prev" style="grid-template-columns:repeat(${l.cols},1fr)">${cells}</div>
-      <div class="lay-lbl">${l.label}</div></button>`;
+      <div class="lay-lbl">${this._layLabel(l)}</div></button>`;
   }
 
   _getCams() {
@@ -346,10 +415,13 @@ export class FrigateModernHassCardEditor extends HTMLElement {
     const c = { ...this._config };
     if (cams.length > 1) { c.cameras = cams; delete c.camera_entity; }
     else if (cams.length === 1) { c.camera_entity = cams[0].entity; delete c.cameras; }
-    const t=g('title'),s=g('subtitle'),w=g('window_hours'),r=g('rotate_seconds');
+    const t=g('title'),s=g('subtitle'),w=g('window_hours'),r=g('rotate_seconds'),el=g('events_limit');
     if(t) c.title=t; else delete c.title;
     if(s) c.subtitle=s; else delete c.subtitle;
     if(w) c.window_hours=Number(w);
+    const th=g('timeline_hours'); if(th) c.timeline_hours=Number(th);
+    c.timeline_mode = this.querySelector('#timeline_mode')?.value === 'recordings' ? 'recordings' : 'events';
+    if(el) c.events_limit=Number(el); else delete c.events_limit;
     c.rotate_seconds = Number(r)||0;
     // custom colors
     c.accent_color = this.querySelector('#use_accent')?.checked
@@ -376,6 +448,14 @@ export class FrigateModernHassCardEditor extends HTMLElement {
     c.stack_on_mobile = this.querySelector('#stack_on_mobile')?.checked !== false;
     c.live_provider = this.querySelector('input[name="live_provider"]:checked')?.value === 'go2rtc' ? 'go2rtc' : 'hls';
     c.go2rtc_mode = this.querySelector('input[name="go2rtc_mode"]:checked')?.value || 'mse';
+    c.camera_only = this.querySelector('#camera_only')?.checked === true;
+    c.events_only = this.querySelector('#events_only')?.checked === true;
+    c.floating_menu = this.querySelector('#floating_menu')?.checked !== false;
+    c.menu_position = this.querySelector('#menu_position')?.value || 'right';
+    c.ptz_position = this.querySelector('#ptz_position')?.value || 'bottom-right';
+    const tl = this.querySelector('#timeline')?.value || 'auto';
+    c.timeline = tl === 'auto' ? 'auto' : tl === 'on';
+    c.ptz = this.querySelector('#ptz')?.checked !== false;
     this._config=c; this._dispatch();
   }
   _dispatch() { this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:this._config}})); }

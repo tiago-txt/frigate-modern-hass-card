@@ -7,7 +7,7 @@
  * always-visible compact latest event, camera entity picker in editor.
  * ---------------------------------------------------------------
  */
-export const VERSION = '1.3.0';
+export const VERSION = '1.4.1-dev.8';
 export const CARD_TAG = 'frigate-modern-hass-card';
 export const DAY = 86400;
 // Smallest tile width the automatic grid will produce, in px. Below this a
@@ -45,7 +45,28 @@ export const ICONS = {
   panelOn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="14" y="6" width="6" height="12" fill="currentColor" stroke="none" rx="1"/></svg>',
   panelOff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M14 5v14"/></svg>',
   grid:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3v8h8V3H3zm6 6H5V5h4v4zm-6 4v8h8v-8H3zm6 6H5v-4h4v4zm4-16v8h8V3h-8zm6 6h-4V5h4v4zm-6 4v8h8v-8h-8zm6 6h-4v-4h4v4z"/></svg>',
+  // The events view: a wall of separate moments, so the icon is a set of blocks
+  // rather than the camera grid's single subdivided frame.
+  events:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v6H4V4zm9 0h7v6h-7V4zM4 12h7v8H4v-8zm9 0h7v8h-7v-8z"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+  // The events timeline: staggered bars, which is what a timeline of moments
+  // looks like — a clock icon would read as "history", not as the strip itself.
+  timeline:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h9v3H3V5zm5 5.5h13v3H8v-3zM3 16h7v3H3v-3z"/></svg>',
+  info:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>',
   person:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>',
+  menu:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>',
+  close:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>',
+  ptz:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8 6h3v4H7V7L3 11l4 4v-3h4v4H8l4 4 4-4h-3v-4h4v3l4-4-4-4v3h-4V6h3l-4-4z"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>',
+  down:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>',
+  left:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>',
+  right:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>',
+  minus:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg>',
+  reset:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>',
+  // The recordings strip in miniature: a spine with ribs, taller where more went
+  // on. Used as the legend's own swatch for it.
+  bone:'<svg class="lg-bone" viewBox="0 0 26 12" fill="currentColor" aria-hidden="true"><rect x="0" y="5" width="2" height="2" rx="1"/><rect x="4" y="4" width="2" height="4" rx="1"/><rect x="8" y="2" width="2" height="8" rx="1"/><rect x="12" y="0" width="2" height="12" rx="1"/><rect x="16" y="3" width="2" height="6" rx="1"/><rect x="20" y="1" width="2" height="10" rx="1"/><rect x="24" y="5" width="2" height="2" rx="1"/></svg>',
 };
 
 // ── helpers ──────────────────────────────────────────────────
@@ -74,6 +95,10 @@ export const GRID_LAYOUTS = [
   { id: '16',    label: '4 x 4', tiles: 16, cols: 4, spans: [] },
 ];
 export function findLayout(id) { return GRID_LAYOUTS.find(l => l.id === id) || null; }
+
+// Where a floating overlay may sit over the camera. Shared by the action menu
+// and the PTZ controls so the two lists can never drift apart.
+export const OVERLAY_POSITIONS = ['top','bottom','top-left','top-right','bottom-left','bottom-right','left','right'];
 
 // A camera's size in grid cells. Accepts a number (square, e.g. 2 for 2x2) or
 // {cols, rows}. Clamped so a typo cannot produce a grid nothing else fits in.
